@@ -1,9 +1,11 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using Unity.VisualScripting;
 using UnityEditorInternal.Profiling.Memory.Experimental.FileFormat;
 using UnityEngine;
+using UnityEngine.Assertions.Must;
 using UnityEngine.UIElements;
 
 public class Player : MonoBehaviour
@@ -15,59 +17,106 @@ public class Player : MonoBehaviour
     private readonly float RotationSpeed = 500f;
     private bool Placeable = false;
     public Transform Destination;
-    
+    public Vector3 movementDirection;
+
+    private Vector3 rollDir;
+    private float rollSpeed;
+
+    private int count;
+
+    private enum State
+    {
+        Normal,
+        Dodging,
+    }
+
+    public Rigidbody rigidBody;
+
+    private State state;
 
     // Start is called before the first frame update
     void Start()
     {
-        
+        state = State.Normal;
+        rigidBody = GetComponent<Rigidbody>();
     }
 
     // Update is called once per frame
     void Update()
     {
-        Vector3 movementDirection = new();
+        movementDirection = new();
+        switch (state){
+            case State.Normal:
+                // Forwards
+                if (Input.GetKey(KeyCode.W))
+                {
+                    movementDirection.z += MovementSpeed;
+                }
+                // Backwards
+                if (Input.GetKey(KeyCode.S))
+                {
+                    movementDirection.z -= MovementSpeed;
+                }
+                // Left
+                if (Input.GetKey(KeyCode.A))
+                {
+                    movementDirection.x -= MovementSpeed;
+                }
+                // Right
+                if (Input.GetKey(KeyCode.D))
+                {
+                    movementDirection.x += MovementSpeed;
+                }
+                if (Input.GetKey(KeyCode.E))
+                {
+                    this.gameObject.SetActive(false);
+                    transform.position = Destination.position;
+                    this.gameObject.SetActive(true);
+                }
 
-        // Forwards
-        if (Input.GetKey(KeyCode.W))
-        {
-            movementDirection.z += MovementSpeed;
-        }
-        // Backwards
-        if (Input.GetKey(KeyCode.S))
-        {
-            movementDirection.z -= MovementSpeed;
-        }
-        // Left
-        if (Input.GetKey(KeyCode.A))
-        {
-            movementDirection.x -= MovementSpeed;
-        }
-        // Right
-        if (Input.GetKey(KeyCode.D))
-        {
-            movementDirection.x += MovementSpeed;
-        }
-        if (Input.GetKey(KeyCode.E))
-        {
-            this.gameObject.SetActive(false);
-            transform.position = Destination.position;
-            this.gameObject.SetActive(true);
-        }
+                if (Input.GetMouseButtonDown(1))
+                {
+                    TryPlaceTurret();
+                }
 
-        if (movementDirection != Vector3.zero)
-        {
-            transform.Translate(movementDirection * Time.deltaTime, Space.World);
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation,
-                Quaternion.LookRotation(movementDirection, Vector3.up),
-                RotationSpeed * Time.deltaTime);
+                if (Input.GetKey(KeyCode.Space))
+                {
+                    rollDir = movementDirection;
+                    rollSpeed = 1.5f;
+                    state = State.Dodging;
+                    count = 0;
+                }
+                break;
+            case State.Dodging:
+                break;
         }
+    }
 
-        #warning Player is currently hard coded to place turret, change this to place from active inventory slot
-        if (Input.GetMouseButtonDown(1))
+    private void FixedUpdate()
+    {
+        switch (state)
         {
-            TryPlaceTurret();
+            case State.Normal:
+                if (movementDirection != Vector3.zero)
+                {
+                    transform.Translate(movementDirection * Time.deltaTime, Space.World);
+                    transform.rotation = Quaternion.RotateTowards(
+                        transform.rotation,
+                        Quaternion.LookRotation(movementDirection, Vector3.up),
+                        RotationSpeed * Time.deltaTime);
+                }
+                break;
+            case State.Dodging:
+                if (count < 3){
+                    rigidBody.AddForce(rollDir.x, 0, rollDir.z, ForceMode.Impulse);
+                    count++;
+                }
+                if(count == 3)
+                {
+                    state = State.Normal;
+                    count = 0;
+                }
+                break;
         }
     }
 
